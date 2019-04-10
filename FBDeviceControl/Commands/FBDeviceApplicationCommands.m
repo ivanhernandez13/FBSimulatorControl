@@ -12,6 +12,7 @@
 #import "FBAMDevice+Private.h"
 #import "FBAMDevice.h"
 #import "FBAMDServiceConnection.h"
+#import "FBApplicationBundle.h"
 #import "FBDevice+Private.h"
 #import "FBDevice.h"
 #import "FBDeviceApplicationLaunchStrategy.h"
@@ -65,13 +66,46 @@ static void TransferCallback(NSDictionary<NSString *, id> *callbackDictionary, F
 
 - (FBFuture<NSNull *> *)installApplicationWithPath:(NSString *)path
 {
+  NSError *error = nil;
+  NSString *bundleID = [FBApplicationBundle infoPlistKey:@"CFBundleIdentifier" forAppAtPath:path error:&error];
+  if (!bundleID) {
+    return [[FBDeviceControlError
+             describeFormat:@"Could not obtain Bundle ID for app at path %@: %@", path, error]
+            failFuture];
+  }
+
   NSURL *appURL = [NSURL fileURLWithPath:path isDirectory:YES];
-  NSDictionary *options = @{@"PackageType" : @"Developer"};
+
+  // Hacky way to get embedded deltas path. Figure out how to get it with
+  // `IDEiOSSupportCore`AppInstallationShadowPath` instead.
+  NSString *tmpDirPath = @(getenv("TMPDIR")).stringByDeletingLastPathComponent;
+  NSString *deltaSubPath = @"/C/com.apple.DeveloperTools/All/Xcode/EmbeddedAppDeltas";
+  NSString *deltaPath = [tmpDirPath stringByAppendingString: deltaSubPath];
+  [self.device.logger logFormat:@"Embedded App Deltas: %@", deltaPath];
+
+  //NSString *deltaPath = @"/var/folders/h5/kdlymwhn5znb3gfnrtbvvqkh00c30v/C/com.apple.DeveloperTools/All/Xcode/EmbeddedAppDeltas";
+  NSDictionary *options = @{
+    @"CFBundleIdentifier": bundleID,
+    @"IsUserInitiated": @1,
+    @"PackageType": @"Developer",
+    @"ShadowParentKey": [NSURL fileURLWithPath:deltaPath isDirectory:YES]
+  };
   return [[self
     transferAppURL:appURL options:options]
     onQueue:self.device.workQueue fmap:^(NSNull *_) {
       return [self secureInstallApplication:appURL options:options];
     }];
+}
+
+- (FBFuture<NSNull *> *)Original_installApplicationWithPath:(NSString *)path
+{
+  NSURL *appURL = [NSURL fileURLWithPath:path isDirectory:YES];
+  NSDictionary *options = @{@"PackageType" : @"Developer"};
+  return [[self
+           transferAppURL:appURL options:options]
+          onQueue:self.device.workQueue fmap:^(NSNull *_) {
+            return [self secureInstallApplication:appURL options:options];
+          }];
 }
 
 - (FBFuture<id> *)uninstallApplicationWithBundleID:(NSString *)bundleID
@@ -214,15 +248,15 @@ static void TransferCallback(NSDictionary<NSString *, id> *callbackDictionary, F
   return [[self.device.amDevice
     connectToDeviceWithPurpose:@"install"]
     onQueue:self.device.workQueue pop:^(FBAMDevice *device) {
-      [self.device.logger logFormat:@"Installing Application %@", appURL];
-      int status = self.device.amDevice.calls.SecureInstallApplication(
-        0,
+      [self.device.logger logFormat:@"Installing Application Bundle %@", appURL];
+      int status = self.device.amDevice.calls.SecureInstallApplicationBundle(
         device.amDevice,
-        (__bridge CFURLRef _Nonnull)(appURL),
-        (__bridge CFDictionaryRef _Nonnull)(options),
-        (AMDeviceProgressCallback) InstallCallback,
-        (__bridge void *) (self.device.amDevice)
+        appURL,
+        options,
+        (AMDeviceInstallCallback) InstallCallback,
+        (__bridge void *)self.device.amDevice
       );
+
       if (status != 0) {
         NSString *errorMessage = CFBridgingRelease(self.device.amDevice.calls.CopyErrorText(status));
         return [[FBDeviceControlError
@@ -232,6 +266,31 @@ static void TransferCallback(NSDictionary<NSString *, id> *callbackDictionary, F
       [self.device.logger logFormat:@"Installed Application %@", appURL];
       return [FBFuture futureWithResult:NSNull.null];
     }];
+}
+
+- (FBFuture<NSNull *> *)Original_secureInstallApplication:(NSURL *)appURL options:(NSDictionary *)options
+{
+  return [[self.device.amDevice
+           connectToDeviceWithPurpose:@"install"]
+          onQueue:self.device.workQueue pop:^(FBAMDevice *device) {
+            [self.device.logger logFormat:@"Installing Application %@", appURL];
+            int status = self.device.amDevice.calls.SecureInstallApplication(
+                                                                             0,
+                                                                             device.amDevice,
+                                                                             (__bridge CFURLRef _Nonnull)(appURL),
+                                                                             (__bridge CFDictionaryRef _Nonnull)(options),
+                                                                             (AMDeviceProgressCallback) InstallCallback,
+                                                                             (__bridge void *) (self.device.amDevice)
+                                                                             );
+            if (status != 0) {
+              NSString *errorMessage = CFBridgingRelease(self.device.amDevice.calls.CopyErrorText(status));
+              return [[FBDeviceControlError
+                       describeFormat:@"Failed to install application %@ (%@)", [appURL lastPathComponent], errorMessage]
+                      failFuture];
+            }
+            [self.device.logger logFormat:@"Installed Application %@", appURL];
+            return [FBFuture futureWithResult:NSNull.null];
+          }];
 }
 
 - (FBFuture<NSDictionary<NSString *, NSDictionary<NSString *, id> *> *> *)installedApplicationsData:(NSArray<NSString *> *)returnAttributes

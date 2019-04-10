@@ -55,6 +55,7 @@ typedef struct {
  Defines the "Progress Callback" function signature.
  */
 typedef void (*AMDeviceProgressCallback)(NSDictionary<NSString *, id> *progress, void *_Nullable context);
+typedef void (*AMDeviceInstallCallback)(NSDictionary<NSString *, id> *callbackDictionary, void *device);
 
 /**
  Defines the "Notification Callback" function signature.
@@ -96,7 +97,40 @@ typedef struct {
   // Services
   int (*SecureStartService)(AMDeviceRef device, CFStringRef service_name, _Nullable CFDictionaryRef userinfo, CFTypeRef *serviceOut);
   int (*SecureTransferPath)(int arg0, AMDeviceRef device, CFURLRef arg2, CFDictionaryRef arg3, _Nullable AMDeviceProgressCallback callback, void *_Nullable context);
-  int (*SecureInstallApplication)(int arg0, AMDeviceRef device, CFURLRef arg2, CFDictionaryRef arg3, _Nullable AMDeviceProgressCallback callback, void *_Nullable context);
+  /*
+   mach_error_t AMDeviceSecureInstallApplication(
+     uint32_t unknown0,
+     am_device device,
+     CFURLRef url,
+     CFDictionaryRef options,
+     void* callback,
+     int callback_arg
+   );
+   */
+  int (*SecureInstallApplication)(
+    int arg0,
+    AMDeviceRef device,
+    CFURLRef arg2,
+    CFDictionaryRef arg3,
+    _Nullable AMDeviceInstallCallback callback,
+    void *_Nullable context
+  );
+  /*
+   mach_error_t AMDeviceSecureInstallApplicationBundle(
+     AMDeviceRef device,
+     NSURL *path,
+     NSDictionary<NSString *, NSObject *> *options,
+     AMDeviceInstallCallback callback,
+     void *context
+   );
+   */
+  int (*SecureInstallApplicationBundle)(
+    AMDeviceRef device,
+    NSURL *arg2,
+    NSDictionary<NSString *, NSObject *> *arg3,
+    _Nullable AMDeviceInstallCallback callback,
+    void *_Nullable context
+  );
   int (*SecureUninstallApplication)(int arg0, AMDeviceRef device, CFStringRef arg2, int arg3, _Nullable AMDeviceProgressCallback callback, void *_Nullable context);
   int (*LookupApplications)(AMDeviceRef device, CFDictionaryRef _Nullable options, CFDictionaryRef _Nonnull * _Nonnull attributesOut);
   int (*CreateHouseArrestService)(AMDeviceRef device, CFStringRef bundleID, void *_Nullable unused, AFCConnectionRef *connectionOut);

@@ -39,6 +39,8 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (nullable instancetype)applicationWithPath:(NSString *)path error:(NSError **)error;
 
++ (NSString *)infoPlistKey:(NSString *)key forAppAtPath:(NSString *)appPath error:(NSError **)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

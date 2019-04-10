@@ -254,6 +254,7 @@ static const NSTimeInterval ServiceReuseTimeout = 6.0;
   calls->Release = FBGetSymbolFromHandle(handle, "AMDeviceRelease");
   calls->Retain = FBGetSymbolFromHandle(handle, "AMDeviceRetain");
   calls->SecureInstallApplication = FBGetSymbolFromHandle(handle, "AMDeviceSecureInstallApplication");
+  calls->SecureInstallApplicationBundle = FBGetSymbolFromHandle(handle, "AMDeviceSecureInstallApplicationBundle");
   calls->SecureStartService = FBGetSymbolFromHandle(handle, "AMDeviceSecureStartService");
   calls->SecureTransferPath = FBGetSymbolFromHandle(handle, "AMDeviceSecureTransferPath");
   calls->SecureUninstallApplication = FBGetSymbolFromHandle(handle, "AMDeviceSecureUninstallApplication");
